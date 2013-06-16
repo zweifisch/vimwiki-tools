@@ -1,21 +1,23 @@
-#!/usr/bin/env python2
-
 """vimwiki
 
 Usage:
   vimwiki gen-index <wiki-folder> [--output-type=<type>] [--extension=<extension>] [--write] [--bulk]
+  vimwiki 2markdown <wiki-folder> --output-extension=<extension>
+  vimwiki stats <wiki-foler>
 
 Options:
-  -h --help             Show this screen.
-  --version             Show version.
-  -w --write            Write to index.wiki
-  -b --bulk             update all wikis
-  --output-type=<type>  html or wiki [default: wiki]
-  --extension=<ext>     extension of wiki files [default: wiki]
+  -h --help                show this screen
+  --version                show version
+  -w --write               write to index.wiki
+  -b --bulk                update all wikis
+  -o --output-type=<type>  html or wiki [default: wiki]
+  --extension=<ext>        extension of wiki files [default: wiki]
 
 Example:
   vimwiki gen-index -w ~/wiki/linux
   vimwiki gen-index ~/wiki/linux --output-type html
+  vimwiki 2markdown ~/wiki/programming --output-extension wiki
+  vimwiki stats ~/wiki
 """
 
 import sys
@@ -132,8 +134,46 @@ def multiple_wiki(root_dir, options):
 			single_wiki(wiki_path, options)
 
 
+def getsub(m):
+	if m.group() in ['{{{', '}}}']:
+		return '```'
+	_, level, title = m.groups()
+	return "%s %s" % ("#" * len(level), title)
+
+
+def convert2markdown(content):
+	return re.sub(r"((={1,}) (.*) \2|\{{3}|\}{3})", getsub, content)
+
+
+def markdown(wiki_dir, extension):
+	files = get_files(wiki_dir)
+	for f in files:
+		name,ext = os.path.splitext(f)
+		src = os.path.join(wiki_dir, f)
+		dest = os.path.join(wiki_dir, name + os.path.extsep + extension)
+		original = file(src).read()
+		content = convert2markdown(original)
+		if content != original:
+			with open(dest,'w') as fp:
+				fp.write(content)
+
+
+def stats(root_dir):
+	wikis = os.listdir(os.path.expanduser(root_dir))
+	output = []
+	for wiki in wikis:
+		wiki_path = os.path.join(root_dir, wiki)
+		if os.path.isdir(wiki_path):
+			output.append((wiki,len(get_files(wiki_path))))
+
+	pad = max([len(wiki) for (wiki,_) in output]) + 1
+
+	for wiki,count in sorted(output, key=operator.itemgetter(1), reverse=True):
+		print(('{0: >%d} {1}' % pad).format(wiki, count))
+
+
 def main():
-	args = docopt(__doc__, version='vimwiki 0.0.1')
+	args = docopt(__doc__, version='vimwiki 0.0.2')
 
 	if args['gen-index']:
 
@@ -148,6 +188,11 @@ def main():
 		else:
 			single_wiki(args['<wiki-folder>'], opts)
 
+	if args['2markdown']:
+		markdown(args['<wiki-folder>'], args['--output-extension'])
+
+	if args['stats']:
+		stats(args['<wiki-foler>'])
 
 if __name__ == '__main__':
 	main()
